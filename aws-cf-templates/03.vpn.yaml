@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS client VPN Template
+
+#Parameter section
+Parameters:
+  Name:
+    Description: Name
+    Type: String
+    MaxLength: 255
+    MinLength: 1
+
+  ClientCertificateArn:
+    Description: Arn of the acm imported client certificate
+    Type: String
+    NoEcho: false
+    MinLength: 1
+
+  ServerCertificateArn:
+    Description: Arn of the acm imported server certificate
+    Type: String
+    NoEcho: false
+
+  ClientCidrBlock:
+    Description: The None overlap CIDR block and it should be /22 or greater.
+    Type: String
+    Default: 10.0.0.0/22
+    NoEcho: false
+
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID of the Egress VPC
+
+  AssociationSubnetId1:
+    Description: The subnet to associate the VPN endpoint with
+    Type: AWS::EC2::Subnet::Id
+
+  AssociationSubnetId2:
+    Description: The subnet to associate the VPN endpoint with
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+  ClientVpnLogGroup:
+    Properties:
+      LogGroupName:
+        Fn::Sub: "${Name}-ClientVpn"
+      RetentionInDays: 30
+    Type: AWS::Logs::LogGroup
+
+  ClientVpnEndpoint:
+    Properties:
+      Description:
+        Fn::Sub: "${Name} Client Vpn"
+      AuthenticationOptions:
+        - MutualAuthentication:
+            ClientRootCertificateChainArn:
+              Ref: ClientCertificateArn
+          Type: certificate-authentication
+      SplitTunnel: true
+      ClientCidrBlock:
+        Ref: ClientCidrBlock
+      ConnectionLogOptions:
+        CloudwatchLogGroup:
+          Ref: ClientVpnLogGroup
+        Enabled: true
+      ServerCertificateArn:
+        Ref: ServerCertificateArn
+      TagSpecifications:
+        - ResourceType: client-vpn-endpoint
+          Tags:
+            - Key: Name
+              Value:
+                Ref: Name
+      VpcId: !Ref VPCId
+      TransportProtocol: udp
+    Type: AWS::EC2::ClientVpnEndpoint
+
+  ClientVpnTargetNetworkAssociation:
+    Type: AWS::EC2::ClientVpnTargetNetworkAssociation
+    Properties:
+      ClientVpnEndpointId:
+        Ref: ClientVpnEndpoint
+      SubnetId:
+        Ref: AssociationSubnetId1
+
+  ClientVpnTargetNetworkAssociation2:
+    Type: AWS::EC2::ClientVpnTargetNetworkAssociation
+    Properties:
+      ClientVpnEndpointId:
+        Ref: ClientVpnEndpoint
+      SubnetId:
+        Ref: AssociationSubnetId2
+
+  RouteToDbVPCPrivateSubnet1:
+    DependsOn: ClientVpnTargetNetworkAssociation
+    Type: AWS::EC2::ClientVpnRoute
+    Properties:
+      Description: Route Private Subnet
+      ClientVpnEndpointId:
+        Ref: ClientVpnEndpoint
+      DestinationCidrBlock: !ImportValue "database-vpcCidr"
+      TargetVpcSubnetId:
+        Ref: AssociationSubnetId1
+
+  RouteToDbVPCPrivateSubnet2:
+    DependsOn: ClientVpnTargetNetworkAssociation
+    Type: AWS::EC2::ClientVpnRoute
+    Properties:
+      Description: Route Private Subnet
+      ClientVpnEndpointId:
+        Ref: ClientVpnEndpoint
+      DestinationCidrBlock: !ImportValue "database-vpcCidr"
+      TargetVpcSubnetId:
+        Ref: AssociationSubnetId2
+
+  RouteToInternetAuthorizationRule:
+    DependsOn: ClientVpnTargetNetworkAssociation
+    Type: AWS::EC2::ClientVpnAuthorizationRule
+    Properties:
+      Description: Route to the internet
+      AuthorizeAllGroups: true
+      ClientVpnEndpointId:
+        Ref: ClientVpnEndpoint
+      TargetNetworkCidr: 0.0.0.0/0
+
+Outputs:
+  ClientVPNEndpointId:
+    Description: "ID of the created AWS Client VPN endpoint"
+    Value: !Ref ClientVpnEndpoint
+
+  ClientVPNEndpointAssociation1:
+    Description: "Association ID of the AWS Client VPN endpoint with Subnet 1"
+    Value: !Ref ClientVpnTargetNetworkAssociation
+
+  ClientVPNEndpointAssociation2:
+    Description: "Association ID of the AWS Client VPN endpoint with Subnet 2"
+    Value: !Ref ClientVpnTargetNetworkAssociation2
+
+  RouteToDatabaseVPCPrivateSubnet1:
+    Description: "Route added to reach the private subnet 1 of the database VPC"
+    Value: !Ref RouteToDbVPCPrivateSubnet1
+
+  RouteToDatabaseVPCPrivateSubnet2:
+    Description: "Route added to reach the private subnet 2 of the database VPC"
+    Value: !Ref RouteToDbVPCPrivateSubnet2
+
+  RouteToInternetAuthorizationRule:
+    Description: "Authorization rule allowing access to the internet"
+    Value: !Ref RouteToInternetAuthorizationRule

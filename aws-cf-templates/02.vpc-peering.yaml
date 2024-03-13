@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Two VPC Peering Connection"
+
+#Parameter section
+Parameters:
+  VPCId1:
+    Type: AWS::EC2::VPC::Id
+    Description: "System VPC Id"
+    MinLength: 1
+
+  VPCId2:
+    Type: AWS::EC2::VPC::Id
+    Description: "Database VPC Id"
+    MinLength: 1
+# Resources section
+Resources:
+  VPCPeeringConnection:
+    Type: "AWS::EC2::VPCPeeringConnection"
+    Properties:
+      PeerVpcId: !Ref VPCId2
+      VpcId: !Ref VPCId1
+      Tags:
+        - Key: Name
+          Value: VPC Peering
+  # Routes section
+  RouteVpc2:
+    Type: AWS::EC2::Route
+    DependsOn: VPCPeeringConnection
+    Properties:
+      RouteTableId: !ImportValue "system-publicRouteTable"
+      DestinationCidrBlock: !ImportValue "database-vpcCidr"
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+  RouteVpc1:
+    Type: AWS::EC2::Route
+    DependsOn: VPCPeeringConnection
+    Properties:
+      RouteTableId: !ImportValue "database-publicRouteTable"
+      DestinationCidrBlock: !ImportValue "system-vpcCidr"
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+Outputs:
+  VpcPeeringConnectionId:
+    Description: "ID of the created VPC peering connection"
+    Value: !Ref VPCPeeringConnection
+
+  RouteToDatabaseVpc:
+    Description: "Route added in the system VPC to reach the database VPC"
+    Value: !Ref RouteVpc2
+
+  RouteToSystemVpc:
+    Description: "Route added in the database VPC to reach the system VPC"
+    Value: !Ref RouteVpc1

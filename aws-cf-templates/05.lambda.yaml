@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AWS SAM template with a simple API definition with caching turned on
+#Parameter section
+Parameters:
+  BucketName:
+    Description: Bucket Name
+    Type: String
+    MaxLength: 255
+    MinLength: 1
+    Default: lambda-bucket-aws-tech
+
+  SourceName:
+    Description: Source Name
+    Type: String
+    MaxLength: 255
+    MinLength: 1
+    Default: s3://lambda-bucket-aws-tech/lambda.zip
+
+Resources:
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      CacheClusterEnabled: true
+      CacheClusterSize: "0.5"
+      MethodSettings:
+        - ResourcePath: /
+          HttpMethod: GET
+          CachingEnabled: true
+          CacheTtlInSeconds: 300
+      Tags:
+        CacheMethods: All
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+            RestApiId:
+              Ref: ApiGatewayApi
+      Runtime: python3.10
+      Handler: lambda.lambda_handler
+       # Location of the Lambda function code
+      CodeUri: s3://lambda-bucket-aws-tech/lambda.zip 
+      Policies:
+        - AWSLambdaExecute
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectACL
+              Resource: !Sub arn:aws:s3:::${BucketName}/*
+
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+    Export:
+      Name: !Sub "${AWS::StackName}-endpoint"
+
+  LambdaArn:
+    Description: "Lambda ARN"
+    Value: !GetAtt ApiFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-arn"

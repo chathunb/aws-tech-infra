@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AWS SAM template with a simple API definition with caching turned on
+
+Parameters:
+  GithubRepoName:
+    Description: Github Repo Name
+    Type: String
+    MaxLength: 255
+    MinLength: 1
+    Default: https://github.com/chathunb/aws-tech-lambda.git
+
+Resources:
+  Project:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: lambda-github
+      Description: A description about my project
+      ServiceRole:  !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: no_artifacts
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:4.0
+      Source:
+        Type: GITHUB
+        Location: !Ref GithubRepoName
+      TimeoutInMinutes: 10
+  
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: CodeBuildAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 'logs:*'
+                - 'lambda:UpdateFunctionCode'
+                Effect: Allow
+                Resource: '*'
+
+Outputs:
+  CodeBuildProjectArn:
+    Description: The ARN of the CodeBuild project
+    Value: !Ref Project

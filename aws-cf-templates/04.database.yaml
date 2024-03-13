@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ServerlessV2 Cluster
+Parameters:
+  MasterUsername:
+    Type: String
+    Default: master
+  DBClusterIdentifier:
+    Type: String
+    Default: primary-db
+  MinCapacity:
+    Type: String
+    Default: 0.5
+  MaxCapacity:
+    Type: String
+    Default: 1
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: "Database VPC Id"
+    MinLength: 1
+
+Resources:
+  RDSDBCluster:
+    Type: "AWS::RDS::DBCluster"
+    Properties:
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref DBClusterIdentifier
+      EngineVersion: 15.2
+      MasterUsername: !Ref MasterUsername
+      #MasterUserPassword: !Ref MasterUserPassword
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        KmsKeyId: !Ref KMSKey
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref MinCapacity
+        MaxCapacity: !Ref MaxCapacity
+      VpcSecurityGroupIds:
+        - !Ref pgDBSecurityGroup
+  RDSDBInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref RDSDBCluster
+
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for my serverless PostgreSQL database
+      SubnetIds:
+        - !ImportValue database-PrivateSubnet2
+        - !ImportValue database-PrivateSubnet2
+        - !ImportValue database-PublicSubnet1
+        - !ImportValue database-PublicSubnet2
+
+  pgDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for my serverless PostgreSQL database
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+
+  # Postgres database secrets
+  KMSKey:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: KMS key
+      EnableKeyRotation: false
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: !Ref "AWS::StackName"
+        Statement:
+          - Sid: "Allow administration of the key"
+            Effect: "Allow"
+            Principal:
+              AWS:
+                Fn::Sub: "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action:
+              - "kms:*"
+            Resource: "*"
+Outputs:
+  Secret:
+    Value:
+      Fn::GetAtt: RDSDBCluster.MasterUserSecret.SecretArn
+
+  DBClusterEndpoint:
+    Description: "Endpoint of the Aurora PostgreSQL cluster"
+    Value: !GetAtt RDSDBCluster.Endpoint.Address
+
+  DBInstanceEndpoint:
+    Description: "Endpoint of the Aurora PostgreSQL instance"
+    Value: !GetAtt RDSDBInstance.Endpoint.Address
