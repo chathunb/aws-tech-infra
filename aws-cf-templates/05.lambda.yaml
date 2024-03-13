@@ -56,7 +56,6 @@ Resources:
                 - s3:GetObjectACL
               Resource: !Sub arn:aws:s3:::${BucketName}/*
 
-
 Outputs:
   ApiEndpoint:
     Description: "API Gateway endpoint URL"

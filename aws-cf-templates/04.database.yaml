@@ -19,6 +19,7 @@ Parameters:
     MinLength: 1
 
 Resources:
+  # creating the database cluster
   RDSDBCluster:
     Type: "AWS::RDS::DBCluster"
     Properties:
@@ -36,6 +37,7 @@ Resources:
         MaxCapacity: !Ref MaxCapacity
       VpcSecurityGroupIds:
         - !Ref pgDBSecurityGroup
+  # creating the database instance
   RDSDBInstance:
     Type: "AWS::RDS::DBInstance"
     Properties:
@@ -52,7 +54,7 @@ Resources:
         - !ImportValue database-PrivateSubnet2
         - !ImportValue database-PublicSubnet1
         - !ImportValue database-PublicSubnet2
-
+  # DB Security group
   pgDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
